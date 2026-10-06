@@ -1,16 +1,16 @@
 use crate::config::{Config, RequestReplacement};
+use crate::locale::{Message, text};
 use crate::logger::Logger;
-use crate::locale::{text, Message};
 use bytes::Bytes;
-use http_body_util::{channel::Channel, combinators::BoxBody, BodyExt, Full};
+use http_body_util::{BodyExt, Full, channel::Channel, combinators::BoxBody};
 use hyper::body::Incoming;
-use hyper::header::{HeaderMap, HeaderName, CONTENT_TYPE, HOST};
+use hyper::header::{CONTENT_TYPE, HOST, HeaderMap, HeaderName};
 use hyper::{Request, Response, StatusCode};
-use hyper_util::client::legacy::{connect::HttpConnector, Client};
+use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use hyper_util::rt::TokioExecutor;
 use std::convert::Infallible;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tokio::time::{sleep, timeout};
 
@@ -83,7 +83,10 @@ fn find(hay: &[u8], needle: &[u8], from: usize) -> Option<usize> {
     if from >= hay.len() {
         return None;
     }
-    hay[from..].windows(needle.len()).position(|w| w == needle).map(|p| p + from)
+    hay[from..]
+        .windows(needle.len())
+        .position(|w| w == needle)
+        .map(|p| p + from)
 }
 
 // Vrai si un champ de génération (content, tool_calls...) est non vide.
@@ -128,7 +131,10 @@ fn is_empty_response(b: &[u8]) -> bool {
         || (find(b, b"\"choices\"", 0).is_some() && !has_content(b))
 }
 
-pub fn apply_request_replacements_with_change(body: &[u8], rules: &[RequestReplacement]) -> (Bytes, bool) {
+pub fn apply_request_replacements_with_change(
+    body: &[u8],
+    rules: &[RequestReplacement],
+) -> (Bytes, bool) {
     if rules.is_empty() {
         return (Bytes::copy_from_slice(body), false);
     }
@@ -183,7 +189,8 @@ pub async fn handle(ctx: Arc<Ctx>, req: Request<Incoming>) -> Result<Response<PB
         }
     };
     let original_body = body.clone();
-    let (body, changed) = apply_request_replacements_with_change(&body, &ctx.cfg.request_replacements);
+    let (body, changed) =
+        apply_request_replacements_with_change(&body, &ctx.cfg.request_replacements);
     ctx.logger.log(
         id,
         &format!(
@@ -341,7 +348,11 @@ async fn relay(
             String::new()
         };
         ctx.logger.log(id, &format!("{head}{tag}"), &held);
-        return if retry { None } else { Some(build(full(Bytes::from(held)))) };
+        return if retry {
+            None
+        } else {
+            Some(build(full(Bytes::from(held))))
+        };
     }
 
     let (mut tx, ch) = Channel::<Bytes, Infallible>::new(16);
@@ -389,7 +400,10 @@ mod tests {
         let original = Bytes::from_static(b"PREFIX SECRET MIDDLE REMOVE_ME END SECRET");
         let rewritten = apply_request_replacements(&original, &rules);
 
-        assert_eq!(String::from_utf8_lossy(&rewritten), "PREFIX [redacted] MIDDLE  END SECRET");
+        assert_eq!(
+            String::from_utf8_lossy(&rewritten),
+            "PREFIX [redacted] MIDDLE  END SECRET"
+        );
     }
 
     #[test]

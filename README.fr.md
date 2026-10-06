@@ -80,6 +80,7 @@ Paramètres dans `proxyia.toml` :
 - `managed_program_restart_interval_secs` : intervalle de redémarrage en secondes ; `0` signifie démarrage unique
 
 À chaque intervalle, le programme en cours est arrêté puis relancé. Si son démarrage échoue, ProxyIA réessaie au prochain intervalle.
+Les fichiers `.bat` et `.cmd` sont exécutés via `cmd.exe /C`. Avec `Ctrl+C`, ProxyIA force l'arrêt du programme géré et de ses processus enfants (`taskkill /T /F`), sans attendre de confirmation du batch. Le même arrêt forcé est utilisé lors des redémarrages périodiques.
 
 Exemple :
 

@@ -1,18 +1,35 @@
-use crate::locale::{text, Language, Message};
+use crate::locale::{Language, Message, text};
 use serde::Deserialize;
 use std::path::PathBuf;
 
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct RequestReplacement {
-    #[serde(alias = "from", alias = "text_to_replace", alias = "find", alias = "old", alias = "search")]
+    #[serde(
+        alias = "from",
+        alias = "text_to_replace",
+        alias = "find",
+        alias = "old",
+        alias = "search"
+    )]
     pub from: String,
-    #[serde(alias = "to", alias = "text_replacing", alias = "replace", alias = "with", alias = "replacement")]
+    #[serde(
+        alias = "to",
+        alias = "text_replacing",
+        alias = "replace",
+        alias = "with",
+        alias = "replacement"
+    )]
     pub to: String,
     #[serde(default)]
     #[serde(alias = "first_only", alias = "replace_once")]
     pub first_only: bool,
     #[serde(default)]
-    #[serde(alias = "from_end", alias = "search_from_end", alias = "last", alias = "match_end")]
+    #[serde(
+        alias = "from_end",
+        alias = "search_from_end",
+        alias = "last",
+        alias = "match_end"
+    )]
     pub from_end: bool,
 }
 
@@ -62,11 +79,14 @@ impl Default for Config {
 
 impl Config {
     pub fn load() -> Self {
-        let path = std::env::args_os().nth(1).map(PathBuf::from).unwrap_or_else(|| {
-            let mut p = std::env::current_exe().unwrap_or_default();
-            p.set_file_name("proxyia.toml");
-            p
-        });
+        let path = std::env::args_os()
+            .nth(1)
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                let mut p = std::env::current_exe().unwrap_or_default();
+                p.set_file_name("proxyia.toml");
+                p
+            });
         match std::fs::read_to_string(&path) {
             Ok(s) => {
                 let language = toml::from_str::<LanguageSetting>(&s)

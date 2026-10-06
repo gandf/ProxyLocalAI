@@ -17,11 +17,12 @@ log_max_files = 5
 max_body_log_bytes = 800000
 
 # Lancer un programme avec ProxyIA (chemin vide ou option désactivée = aucun lancement)
-managed_program_enabled = false
-managed_program_path = ""
-managed_program_args = []
-# Intervalle de redémarrage en secondes (0 = démarrage unique, sans redémarrage périodique)
-managed_program_restart_interval_secs = 0
+managed_program_enabled = true
+managed_program_path = "C:/Windows/System32/cmd.exe"
+managed_program_args = ["/C", "F:/IA/Strata/START-HERE.bat"]
+# Ctrl+C force l'arrêt du programme et de ses descendants; 0 = démarrage unique
+# Intervalle de redémarrage en secondes (0 = aucun redémarrage périodique)
+managed_program_restart_interval_secs = 3600
 
 # Remplacements appliqués uniquement aux requêtes entrantes avant l'envoi au backend.
 # Les champs acceptés sont : from, to, first_only, from_end

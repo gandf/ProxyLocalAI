@@ -1,4 +1,4 @@
-use crate::locale::{text, Language, Message};
+use crate::locale::{Language, Message, text};
 use chrono::Local;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
@@ -42,7 +42,10 @@ impl Logger {
 
     fn open(path: &str) -> (Option<File>, u64) {
         let f = OpenOptions::new().create(true).append(true).open(path).ok();
-        let size = f.as_ref().and_then(|f| f.metadata().ok()).map_or(0, |m| m.len());
+        let size = f
+            .as_ref()
+            .and_then(|f| f.metadata().ok())
+            .map_or(0, |m| m.len());
         (f, size)
     }
 
@@ -64,7 +67,10 @@ impl Logger {
         );
         entry.push_str(&String::from_utf8_lossy(cut));
         if cut.len() < body.len() {
-            entry.push_str(&format!("\n...[{}]", text(self.language, Message::Truncated)));
+            entry.push_str(&format!(
+                "\n...[{}]",
+                text(self.language, Message::Truncated)
+            ));
         }
         entry.push_str("\n\n");
 
@@ -86,7 +92,10 @@ impl Logger {
         } else {
             let _ = fs::remove_file(format!("{}.{}", self.path, self.max_files));
             for i in (1..self.max_files).rev() {
-                let _ = fs::rename(format!("{}.{i}", self.path), format!("{}.{}", self.path, i + 1));
+                let _ = fs::rename(
+                    format!("{}.{i}", self.path),
+                    format!("{}.{}", self.path, i + 1),
+                );
             }
             let _ = fs::rename(&self.path, format!("{}.1", self.path));
         }

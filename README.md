@@ -80,6 +80,7 @@ Options in `proxyia.toml`:
 - `managed_program_restart_interval_secs`: restart interval in seconds; `0` means start once without periodic restarts
 
 At each interval, the running program is stopped and launched again. If startup fails, ProxyIA retries at the next interval.
+`.bat` and `.cmd` files are run through `cmd.exe /C`. On `Ctrl+C`, ProxyIA force-stops the managed program and its child processes (`taskkill /T /F`) without waiting for batch confirmation. The same forced tree shutdown is used for periodic restarts.
 
 Example:
 
