@@ -1,0 +1,21 @@
+# Adresse d'écoute du proxy (à renseigner dans VS Code)
+listen = "127.0.0.1:8085"
+
+# Adresse de llama.cpp
+target = "127.0.0.1:8080"
+
+# Fichier de log (bodies requête/réponse uniquement)
+log_file = "proxyia.log"
+# Taille max d'un fichier de log avant rotation (octets)
+log_max_bytes = 10485760
+# Nombre de fichiers de rotation conservés (proxyia.log.1, .2, ...)
+log_max_files = 5
+# Taille max d'un body écrit dans le log (octets, le reste est tronqué)
+max_body_log_bytes = 800000
+
+# Nombre de renvois à llama.cpp en cas de réponse vide ou d'erreur de connexion
+max_retries = 50
+# Délai avant chaque renvoi (ms)
+retry_delay_ms = 250
+# Délai max d'attente des en-têtes de réponse de llama.cpp (secondes)
+request_timeout_s = 900
