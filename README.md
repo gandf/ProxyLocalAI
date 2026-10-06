@@ -69,6 +69,27 @@ Parameters:
 - `retry_delay_ms`
 - `request_timeout_s`
 
+### 5. External program management
+
+ProxyIA can start an external program after its server starts, then restart it periodically.
+
+Options in `proxyia.toml`:
+- `managed_program_enabled`: enable or disable this feature
+- `managed_program_path`: path to the executable
+- `managed_program_args`: list of arguments to pass to it
+- `managed_program_restart_interval_secs`: restart interval in seconds; `0` means start once without periodic restarts
+
+At each interval, the running program is stopped and launched again. If startup fails, ProxyIA retries at the next interval.
+
+Example:
+
+```toml
+managed_program_enabled = true
+managed_program_path = "C:/Tools/worker.exe"
+managed_program_args = ["--serve"]
+managed_program_restart_interval_secs = 3600
+```
+
 ## Project files
 
 - `proxyia.toml`: main configuration file

@@ -15,6 +15,13 @@ log_max_files = 5
 # Taille max d'un body écrit dans le log (octets, le reste est tronqué)
 max_body_log_bytes = 800000
 
+# Lancer un programme avec ProxyIA (chemin vide ou option désactivée = aucun lancement)
+managed_program_enabled = false
+managed_program_path = ""
+managed_program_args = []
+# Intervalle de redémarrage en secondes (0 = démarrage unique, sans redémarrage périodique)
+managed_program_restart_interval_secs = 0
+
 # Remplacements appliqués uniquement aux requêtes entrantes avant l'envoi au backend.
 # Les champs acceptés sont : from, to, first_only, from_end
 # Exemple : suppression d'un morceau de prompt, remplacement de la première occurrence, ou de la dernière occurrence depuis la fin du payload.

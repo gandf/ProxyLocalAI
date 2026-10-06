@@ -29,6 +29,10 @@ pub struct Config {
     pub retry_delay_ms: u64,
     pub request_timeout_s: u64,
     pub request_replacements: Vec<RequestReplacement>,
+    pub managed_program_enabled: bool,
+    pub managed_program_path: String,
+    pub managed_program_args: Vec<String>,
+    pub managed_program_restart_interval_secs: u64,
 }
 
 impl Default for Config {
@@ -45,6 +49,10 @@ impl Default for Config {
             retry_delay_ms: 500,
             request_timeout_s: 600,
             request_replacements: Vec::new(),
+            managed_program_enabled: false,
+            managed_program_path: String::new(),
+            managed_program_args: Vec::new(),
+            managed_program_restart_interval_secs: 0,
         }
     }
 }
@@ -66,5 +74,38 @@ impl Config {
                 Self::default()
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Config;
+
+    #[test]
+    fn managed_program_is_disabled_by_default() {
+        let config = Config::default();
+
+        assert!(!config.managed_program_enabled);
+        assert!(config.managed_program_path.is_empty());
+        assert!(config.managed_program_args.is_empty());
+        assert_eq!(config.managed_program_restart_interval_secs, 0);
+    }
+
+    #[test]
+    fn managed_program_settings_load_from_toml() {
+        let config: Config = toml::from_str(
+            r#"
+managed_program_enabled = true
+managed_program_path = 'notepad.exe'
+managed_program_args = []
+managed_program_restart_interval_secs = 3600
+"#,
+        )
+        .unwrap();
+
+        assert!(config.managed_program_enabled);
+        assert_eq!(config.managed_program_path, "notepad.exe");
+        assert!(config.managed_program_args.is_empty());
+        assert_eq!(config.managed_program_restart_interval_secs, 3600);
     }
 }

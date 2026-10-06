@@ -1,5 +1,6 @@
 mod config;
 mod logger;
+mod program;
 mod proxy;
 
 use hyper::server::conn::http1;
@@ -19,6 +20,12 @@ async fn main() {
         }
     };
     println!("proxyia: {} -> {}", cfg.listen, cfg.target);
+    tokio::spawn(program::run(
+        cfg.managed_program_enabled,
+        cfg.managed_program_path.clone(),
+        cfg.managed_program_args.clone(),
+        cfg.managed_program_restart_interval_secs,
+    ));
     let ctx = Arc::new(proxy::Ctx::new(cfg));
 
     loop {

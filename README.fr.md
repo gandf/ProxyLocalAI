@@ -69,6 +69,27 @@ Paramètres :
 - `retry_delay_ms`
 - `request_timeout_s`
 
+### 5. Gestion d'un programme externe
+
+ProxyIA peut lancer un programme externe après avoir démarré son serveur, puis le redémarrer périodiquement.
+
+Paramètres dans `proxyia.toml` :
+- `managed_program_enabled` : active ou désactive cette fonctionnalité
+- `managed_program_path` : chemin de l'exécutable
+- `managed_program_args` : liste d'arguments à lui transmettre
+- `managed_program_restart_interval_secs` : intervalle de redémarrage en secondes ; `0` signifie démarrage unique
+
+À chaque intervalle, le programme en cours est arrêté puis relancé. Si son démarrage échoue, ProxyIA réessaie au prochain intervalle.
+
+Exemple :
+
+```toml
+managed_program_enabled = true
+managed_program_path = "C:/Tools/worker.exe"
+managed_program_args = ["--serve"]
+managed_program_restart_interval_secs = 3600
+```
+
 ## Fichiers du projet
 
 - `proxyia.toml` : configuration principale
