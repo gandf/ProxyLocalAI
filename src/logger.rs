@@ -1,7 +1,7 @@
+use chrono::Local;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 struct State {
     file: Option<File>,
@@ -9,6 +9,7 @@ struct State {
 }
 
 pub struct Logger {
+    enabled: bool,
     path: String,
     max_bytes: u64,
     max_files: u32,
@@ -17,9 +18,10 @@ pub struct Logger {
 }
 
 impl Logger {
-    pub fn new(path: &str, max_bytes: u64, max_files: u32, max_body: usize) -> Self {
-        let (file, size) = Self::open(path);
+    pub fn new(path: &str, max_bytes: u64, max_files: u32, max_body: usize, enabled: bool) -> Self {
+        let (file, size) = if enabled { Self::open(path) } else { (None, 0) };
         Self {
+            enabled,
             path: path.to_string(),
             max_bytes,
             max_files,
@@ -39,6 +41,10 @@ impl Logger {
     }
 
     pub fn log(&self, id: u64, head: &str, body: &[u8]) {
+        if !self.enabled {
+            return;
+        }
+
         let cut = &body[..body.len().min(self.max_body)];
         let mut text = format!("[{}] #{id} {head} ({} octets)\n", timestamp(), body.len());
         text.push_str(&String::from_utf8_lossy(cut));
@@ -75,25 +81,6 @@ impl Logger {
     }
 }
 
-// UTC, sans dépendance externe (algorithme civil_from_days).
 fn timestamp() -> String {
-    let d = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
-    let (secs, ms) = (d.as_secs() as i64, d.subsec_millis());
-    let days = secs.div_euclid(86400);
-    let rem = secs.rem_euclid(86400);
-    let z = days + 719468;
-    let era = z.div_euclid(146097);
-    let doe = z.rem_euclid(146097);
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + i64::from(month <= 2);
-    format!(
-        "{year:04}-{month:02}-{day:02} {:02}:{:02}:{:02}.{ms:03}Z",
-        rem / 3600,
-        rem % 3600 / 60,
-        rem % 60
-    )
+    Local::now().format("%Y-%m-%d %H:%M:%S%.3f%:z").to_string()
 }

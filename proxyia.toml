@@ -1,9 +1,11 @@
 # Adresse d'écoute du proxy (à renseigner dans VS Code)
 listen = "127.0.0.1:8085"
 
-# Adresse de llama.cpp
+# Adresse de llama.cpp, vllm, ...
 target = "127.0.0.1:8080"
 
+# Active ou désactive le journal des requêtes/réponses
+log_enabled = false
 # Fichier de log (bodies requête/réponse uniquement)
 log_file = "proxyia.log"
 # Taille max d'un fichier de log avant rotation (octets)
@@ -13,9 +15,48 @@ log_max_files = 5
 # Taille max d'un body écrit dans le log (octets, le reste est tronqué)
 max_body_log_bytes = 800000
 
-# Nombre de renvois à llama.cpp en cas de réponse vide ou d'erreur de connexion
-max_retries = 50
+# Remplacements appliqués uniquement aux requêtes entrantes avant l'envoi au backend.
+# Les champs acceptés sont : from, to, first_only, from_end
+# Exemple : suppression d'un morceau de prompt, remplacement de la première occurrence, ou de la dernière occurrence depuis la fin du payload.
+[[request_replacements]]
+from = "\"max_completion_tokens\":"
+to = "\"thinking_token_budget\":50000,\"max_completion_tokens\":"
+first_only = true
+from_end = true
+
+[[request_replacements]]
+from = "Follow Microsoft content policies.\\n"
+to = ""
+first_only = true
+from_end = false
+
+[[request_replacements]]
+from = "Avoid content that violates copyrights.\\n"
+to = ""
+first_only = true
+from_end = false
+
+[[request_replacements]]
+from = "If you are asked to generate content that is harmful, hateful, racist, sexist, lewd, or violent, only respond with \\\"Sorry, I can't assist with that.\\\"\\n"
+to = ""
+first_only = true
+from_end = false
+
+[[request_replacements]]
+from = "When asked for your name, you must respond with \\\"GitHub Copilot\\\"."
+to = ""
+first_only = true
+from_end = false
+
+[[request_replacements]]
+from = "When asked about the model you are using, you must state that you are using Qwen 3.8 flash next secure.\\n"
+to = ""
+first_only = true
+from_end = false
+
+# Nombre de renvois au backend en cas de réponse vide ou d'erreur de connexion
+max_retries = 10
 # Délai avant chaque renvoi (ms)
 retry_delay_ms = 250
-# Délai max d'attente des en-têtes de réponse de llama.cpp (secondes)
+# Délai max d'attente des en-têtes de réponse du backend (secondes)
 request_timeout_s = 900

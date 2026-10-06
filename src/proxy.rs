@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{Config, RequestReplacement};
 use crate::logger::Logger;
 use bytes::Bytes;
 use http_body_util::{channel::Channel, combinators::BoxBody, BodyExt, Full};
@@ -29,6 +29,7 @@ impl Ctx {
             cfg.log_max_bytes,
             cfg.log_max_files,
             cfg.max_body_log_bytes,
+            cfg.log_enabled,
         ));
         Self {
             cfg,
@@ -50,7 +51,7 @@ fn simple(status: StatusCode, msg: &str) -> Response<PBody> {
 }
 
 fn skip_header(name: &HeaderName) -> bool {
-    matches!(
+    let is_skip: bool = matches!(
         name.as_str(),
         "connection"
             | "keep-alive"
@@ -62,7 +63,8 @@ fn skip_header(name: &HeaderName) -> bool {
             | "content-length"
             | "host"
             | "accept-encoding"
-    )
+    );
+    is_skip
 }
 
 fn filtered(h: &HeaderMap) -> HeaderMap {
@@ -124,6 +126,48 @@ fn is_empty_response(b: &[u8]) -> bool {
         || (find(b, b"\"choices\"", 0).is_some() && !has_content(b))
 }
 
+pub fn apply_request_replacements_with_change(body: &[u8], rules: &[RequestReplacement]) -> (Bytes, bool) {
+    if rules.is_empty() {
+        return (Bytes::copy_from_slice(body), false);
+    }
+
+    let mut text = String::from_utf8_lossy(body).into_owned();
+    let mut changed = false;
+    for rule in rules {
+        if rule.from.is_empty() {
+            continue;
+        }
+
+        if rule.first_only {
+            let before = text.clone();
+            let pos = if rule.from_end {
+                text.rfind(&rule.from)
+            } else {
+                text.find(&rule.from)
+            };
+            if let Some(pos) = pos {
+                let end = pos + rule.from.len();
+                text.replace_range(pos..end, &rule.to);
+            }
+            if text != before {
+                changed = true;
+            }
+        } else {
+            let replaced = text.replace(&rule.from, &rule.to);
+            if replaced != text {
+                changed = true;
+            }
+            text = replaced;
+        }
+    }
+    (Bytes::from(text), changed)
+}
+
+#[allow(dead_code)]
+pub fn apply_request_replacements(body: &[u8], rules: &[RequestReplacement]) -> Bytes {
+    apply_request_replacements_with_change(body, rules).0
+}
+
 pub async fn handle(ctx: Arc<Ctx>, req: Request<Incoming>) -> Result<Response<PBody>, Infallible> {
     let id = ctx.counter.fetch_add(1, Ordering::Relaxed);
     let (parts, body) = req.into_parts();
@@ -131,7 +175,12 @@ pub async fn handle(ctx: Arc<Ctx>, req: Request<Incoming>) -> Result<Response<PB
         Ok(b) => b.to_bytes(),
         Err(_) => return Ok(simple(StatusCode::BAD_REQUEST, "invalid request body")),
     };
-    ctx.logger.log(id, &format!("REQ {} {}", parts.method, parts.uri), &body);
+    let original_body = body.clone();
+    let (body, changed) = apply_request_replacements_with_change(&body, &ctx.cfg.request_replacements);
+    ctx.logger.log(id, &format!("REQ {} {} (reçue)", parts.method, parts.uri), &original_body);
+    if changed {
+        ctx.logger.log(id, &format!("REQ {} {} (après remplacements)", parts.method, parts.uri), &body);
+    }
 
     let pq = parts.uri.path_and_query().map_or("/", |p| p.as_str());
     let uri = format!("http://{}{}", ctx.cfg.target, pq);
@@ -257,4 +306,72 @@ async fn relay(
         logger.log(id, &head, &logbuf);
     });
     Some(build(ch.boxed()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn request_replacements_change_incoming_body_only() {
+        let rules = vec![
+            RequestReplacement {
+                from: "SECRET".into(),
+                to: "[redacted]".into(),
+                first_only: true,
+                from_end: false,
+            },
+            RequestReplacement {
+                from: "REMOVE_ME".into(),
+                to: "".into(),
+                first_only: false,
+                from_end: false,
+            },
+        ];
+
+        let original = Bytes::from_static(b"PREFIX SECRET MIDDLE REMOVE_ME END SECRET");
+        let rewritten = apply_request_replacements(&original, &rules);
+
+        assert_eq!(String::from_utf8_lossy(&rewritten), "PREFIX [redacted] MIDDLE  END SECRET");
+    }
+
+    #[test]
+    fn request_replacement_can_limit_to_first_occurrence() {
+        let rules = vec![RequestReplacement {
+            from: "ABC".into(),
+            to: "X".into(),
+            first_only: true,
+            from_end: false,
+        }];
+
+        let rewritten = apply_request_replacements(b"ABC ABC ABC", &rules);
+        assert_eq!(String::from_utf8_lossy(&rewritten), "X ABC ABC");
+    }
+
+    #[test]
+    fn request_replacement_can_target_last_occurrence() {
+        let rules = vec![RequestReplacement {
+            from: "ABC".into(),
+            to: "X".into(),
+            first_only: true,
+            from_end: true,
+        }];
+
+        let rewritten = apply_request_replacements(b"ABC ABC ABC", &rules);
+        assert_eq!(String::from_utf8_lossy(&rewritten), "ABC ABC X");
+    }
+
+    #[test]
+    fn request_replacements_report_when_prompt_changes() {
+        let rules = vec![RequestReplacement {
+            from: "SECRET".into(),
+            to: "[redacted]".into(),
+            first_only: false,
+            from_end: false,
+        }];
+
+        let (rewritten, changed) = apply_request_replacements_with_change(b"SECRET prompt", &rules);
+        assert!(changed);
+        assert_eq!(String::from_utf8_lossy(&rewritten), "[redacted] prompt");
+    }
 }
