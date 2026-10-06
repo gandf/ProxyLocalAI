@@ -10,7 +10,7 @@ use hyper_util::rt::TokioIo;
 use locale::{Message, text};
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tokio::sync::oneshot;
+use tokio::sync::{RwLock, oneshot};
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
@@ -34,15 +34,17 @@ async fn main() {
     );
     let language = cfg.language;
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
+    let restart_gate = Arc::new(RwLock::new(()));
     let program_task = tokio::spawn(program::run(
         cfg.managed_program_enabled,
         cfg.managed_program_path.clone(),
         cfg.managed_program_args.clone(),
         cfg.managed_program_restart_interval_secs,
         cfg.language,
+        restart_gate.clone(),
         shutdown_rx,
     ));
-    let ctx = Arc::new(proxy::Ctx::new(cfg));
+    let ctx = Arc::new(proxy::Ctx::new(cfg, restart_gate));
 
     let ctrl_c = tokio::signal::ctrl_c();
     tokio::pin!(ctrl_c);

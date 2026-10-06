@@ -1,8 +1,9 @@
 use crate::locale::{Language, Message, text};
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::process::{Child, Command};
-use tokio::sync::oneshot;
+use tokio::sync::{RwLock, oneshot};
 use tokio::time::sleep;
 
 #[cfg(windows)]
@@ -14,6 +15,7 @@ pub async fn run(
     args: Vec<String>,
     restart_interval_secs: u64,
     language: Language,
+    restart_gate: Arc<RwLock<()>>,
     mut shutdown: oneshot::Receiver<()>,
 ) {
     if !enabled {
@@ -46,6 +48,7 @@ pub async fn run(
             }
         }
 
+        let _restart_guard = restart_gate.write().await;
         if let Some(mut running) = child.take() {
             match running.try_wait() {
                 Ok(Some(status)) => println!(

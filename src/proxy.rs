@@ -12,6 +12,7 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
+use tokio::sync::RwLock;
 use tokio::time::{sleep, timeout};
 
 type PBody = BoxBody<Bytes, Infallible>;
@@ -21,10 +22,11 @@ pub struct Ctx {
     logger: Arc<Logger>,
     client: Client<HttpConnector, Full<Bytes>>,
     counter: AtomicU64,
+    restart_gate: Arc<RwLock<()>>,
 }
 
 impl Ctx {
-    pub fn new(cfg: Config) -> Self {
+    pub fn new(cfg: Config, restart_gate: Arc<RwLock<()>>) -> Self {
         let logger = Arc::new(Logger::new(
             &cfg.log_file,
             cfg.log_max_bytes,
@@ -38,6 +40,7 @@ impl Ctx {
             logger,
             client: Client::builder(TokioExecutor::new()).build_http(),
             counter: AtomicU64::new(1),
+            restart_gate,
         }
     }
 }
@@ -234,7 +237,11 @@ pub async fn handle(ctx: Arc<Ctx>, req: Request<Incoming>) -> Result<Response<PB
         };
 
         let wait = Duration::from_secs(ctx.cfg.request_timeout_s);
-        let resp = match timeout(wait, ctx.client.request(r)).await {
+        let response = {
+            let _restart_guard = ctx.restart_gate.read().await;
+            timeout(wait, ctx.client.request(r)).await
+        };
+        let resp = match response {
             Ok(Ok(r)) => r,
             other => {
                 let err = match other {
