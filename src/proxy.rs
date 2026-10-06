@@ -1,5 +1,6 @@
 use crate::config::{Config, RequestReplacement};
 use crate::logger::Logger;
+use crate::locale::{text, Message};
 use bytes::Bytes;
 use http_body_util::{channel::Channel, combinators::BoxBody, BodyExt, Full};
 use hyper::body::Incoming;
@@ -30,6 +31,7 @@ impl Ctx {
             cfg.log_max_files,
             cfg.max_body_log_bytes,
             cfg.log_enabled,
+            cfg.language,
         ));
         Self {
             cfg,
@@ -173,13 +175,36 @@ pub async fn handle(ctx: Arc<Ctx>, req: Request<Incoming>) -> Result<Response<PB
     let (parts, body) = req.into_parts();
     let body = match body.collect().await {
         Ok(b) => b.to_bytes(),
-        Err(_) => return Ok(simple(StatusCode::BAD_REQUEST, "invalid request body")),
+        Err(_) => {
+            return Ok(simple(
+                StatusCode::BAD_REQUEST,
+                text(ctx.cfg.language, Message::InvalidRequestBody),
+            ));
+        }
     };
     let original_body = body.clone();
     let (body, changed) = apply_request_replacements_with_change(&body, &ctx.cfg.request_replacements);
-    ctx.logger.log(id, &format!("REQ {} {} (reçue)", parts.method, parts.uri), &original_body);
+    ctx.logger.log(
+        id,
+        &format!(
+            "REQ {} {} ({})",
+            parts.method,
+            parts.uri,
+            text(ctx.cfg.language, Message::RequestReceived)
+        ),
+        &original_body,
+    );
     if changed {
-        ctx.logger.log(id, &format!("REQ {} {} (après remplacements)", parts.method, parts.uri), &body);
+        ctx.logger.log(
+            id,
+            &format!(
+                "REQ {} {} ({})",
+                parts.method,
+                parts.uri,
+                text(ctx.cfg.language, Message::RequestRewritten)
+            ),
+            &body,
+        );
     }
 
     let pq = parts.uri.path_and_query().map_or("/", |p| p.as_str());
@@ -195,7 +220,10 @@ pub async fn handle(ctx: Arc<Ctx>, req: Request<Incoming>) -> Result<Response<PB
         }
         let rb = rb.header(HOST, ctx.cfg.target.as_str());
         let Ok(r) = rb.body(Full::new(body.clone())) else {
-            return Ok(simple(StatusCode::BAD_REQUEST, "invalid request"));
+            return Ok(simple(
+                StatusCode::BAD_REQUEST,
+                text(ctx.cfg.language, Message::InvalidRequest),
+            ));
         };
 
         let wait = Duration::from_secs(ctx.cfg.request_timeout_s);
@@ -206,9 +234,16 @@ pub async fn handle(ctx: Arc<Ctx>, req: Request<Incoming>) -> Result<Response<PB
                     Ok(Err(e)) => e.to_string(),
                     _ => "timeout".into(),
                 };
-                ctx.logger.log(id, &format!("ERR tentative {attempt}"), err.as_bytes());
+                ctx.logger.log(
+                    id,
+                    &format!("ERR {} {attempt}", text(ctx.cfg.language, Message::Attempt)),
+                    err.as_bytes(),
+                );
                 if last {
-                    return Ok(simple(StatusCode::BAD_GATEWAY, "upstream unavailable"));
+                    return Ok(simple(
+                        StatusCode::BAD_GATEWAY,
+                        text(ctx.cfg.language, Message::UpstreamUnavailable),
+                    ));
                 }
                 sleep(delay).await;
                 continue;
@@ -220,7 +255,10 @@ pub async fn handle(ctx: Arc<Ctx>, req: Request<Incoming>) -> Result<Response<PB
         }
         sleep(delay).await;
     }
-    Ok(simple(StatusCode::BAD_GATEWAY, "upstream unavailable"))
+    Ok(simple(
+        StatusCode::BAD_GATEWAY,
+        text(ctx.cfg.language, Message::UpstreamUnavailable),
+    ))
 }
 
 // None = réponse vide, la requête doit être renvoyée.
@@ -238,7 +276,11 @@ async fn relay(
         .get(CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .is_some_and(|v| v.contains("text/event-stream"));
-    let head = format!("RES {} tentative {attempt}", parts.status);
+    let head = format!(
+        "RES {} {} {attempt}",
+        parts.status,
+        text(ctx.cfg.language, Message::Attempt)
+    );
     let build = |b: PBody| {
         let mut r = Response::new(b);
         *r.status_mut() = parts.status;
@@ -250,16 +292,27 @@ async fn relay(
         let bytes = match body.collect().await {
             Ok(b) => b.to_bytes(),
             Err(e) => {
-                ctx.logger.log(id, &format!("ERR tentative {attempt}"), e.to_string().as_bytes());
+                ctx.logger.log(
+                    id,
+                    &format!("ERR {} {attempt}", text(ctx.cfg.language, Message::Attempt)),
+                    e.to_string().as_bytes(),
+                );
                 return if last {
-                    Some(simple(StatusCode::BAD_GATEWAY, "upstream error"))
+                    Some(simple(
+                        StatusCode::BAD_GATEWAY,
+                        text(ctx.cfg.language, Message::UpstreamError),
+                    ))
                 } else {
                     None
                 };
             }
         };
         let empty = ok && is_empty_response(&bytes);
-        let tag = if empty { " VIDE" } else { "" };
+        let tag = if empty {
+            format!(" {}", text(ctx.cfg.language, Message::Empty))
+        } else {
+            String::new()
+        };
         ctx.logger.log(id, &format!("{head}{tag}"), &bytes);
         if empty && !last {
             return None;
@@ -282,7 +335,11 @@ async fn relay(
 
     if !found {
         let retry = ok && !last;
-        let tag = if ok { " VIDE" } else { "" };
+        let tag = if ok {
+            format!(" {}", text(ctx.cfg.language, Message::Empty))
+        } else {
+            String::new()
+        };
         ctx.logger.log(id, &format!("{head}{tag}"), &held);
         return if retry { None } else { Some(build(full(Bytes::from(held)))) };
     }

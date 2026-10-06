@@ -104,10 +104,12 @@ managed_program_restart_interval_secs = 3600
 Éditez `proxyia.toml` selon votre environnement :
 
 ```toml
+language = "fr" # "fr" ou "en"
 listen = "127.0.0.1:8000"
 target = "192.168.1.50:8000"
 ```
 
+- `language` : langue des messages (`fr` ou `en`, français par défaut)
 - `listen` : adresse où le proxy écoute localement
 - `target` : adresse du backend LLM
 

@@ -1,3 +1,4 @@
+use crate::locale::{text, Language, Message};
 use serde::Deserialize;
 use std::path::PathBuf;
 
@@ -18,6 +19,7 @@ pub struct RequestReplacement {
 #[derive(Deserialize, Clone)]
 #[serde(default)]
 pub struct Config {
+    pub language: Language,
     pub listen: String,
     pub target: String,
     pub log_enabled: bool,
@@ -38,6 +40,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            language: Language::default(),
             listen: "127.0.0.1:8081".into(),
             target: "127.0.0.1:8080".into(),
             log_enabled: true,
@@ -65,26 +68,48 @@ impl Config {
             p
         });
         match std::fs::read_to_string(&path) {
-            Ok(s) => toml::from_str(&s).unwrap_or_else(|e| {
-                eprintln!("Config invalide ({}): {e}", path.display());
-                std::process::exit(1);
-            }),
+            Ok(s) => {
+                let language = toml::from_str::<LanguageSetting>(&s)
+                    .map(|setting| setting.language)
+                    .unwrap_or_default();
+                toml::from_str(&s).unwrap_or_else(|e| {
+                    eprintln!(
+                        "{} ({}): {e}",
+                        text(language, Message::ConfigInvalid),
+                        path.display()
+                    );
+                    std::process::exit(1);
+                })
+            }
             Err(_) => {
-                eprintln!("Config absente ({}), valeurs par défaut", path.display());
+                eprintln!(
+                    "{} ({}), {}",
+                    text(Language::default(), Message::ConfigMissing),
+                    path.display(),
+                    text(Language::default(), Message::DefaultsUsed)
+                );
                 Self::default()
             }
         }
     }
 }
 
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct LanguageSetting {
+    language: Language,
+}
+
 #[cfg(test)]
 mod tests {
     use super::Config;
+    use crate::locale::Language;
 
     #[test]
     fn managed_program_is_disabled_by_default() {
         let config = Config::default();
 
+        assert_eq!(config.language, Language::Fr);
         assert!(!config.managed_program_enabled);
         assert!(config.managed_program_path.is_empty());
         assert!(config.managed_program_args.is_empty());
@@ -99,11 +124,13 @@ managed_program_enabled = true
 managed_program_path = 'notepad.exe'
 managed_program_args = []
 managed_program_restart_interval_secs = 3600
+language = "en"
 "#,
         )
         .unwrap();
 
         assert!(config.managed_program_enabled);
+        assert_eq!(config.language, Language::En);
         assert_eq!(config.managed_program_path, "notepad.exe");
         assert!(config.managed_program_args.is_empty());
         assert_eq!(config.managed_program_restart_interval_secs, 3600);

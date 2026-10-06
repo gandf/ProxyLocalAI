@@ -1,4 +1,5 @@
 # Adresse d'écoute du proxy (à renseigner dans VS Code)
+language = "fr" # "fr" ou "en"
 listen = "127.0.0.1:8085"
 
 # Adresse de llama.cpp, vllm, ...

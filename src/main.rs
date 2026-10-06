@@ -1,8 +1,10 @@
 mod config;
 mod logger;
+mod locale;
 mod program;
 mod proxy;
 
+use locale::{text, Message};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
@@ -15,16 +17,26 @@ async fn main() {
     let listener = match TcpListener::bind(&cfg.listen).await {
         Ok(l) => l,
         Err(e) => {
-            eprintln!("Impossible d'écouter sur {}: {e}", cfg.listen);
+            eprintln!(
+                "{} {}: {e}",
+                text(cfg.language, Message::ListenFailed),
+                cfg.listen
+            );
             std::process::exit(1);
         }
     };
-    println!("proxyia: {} -> {}", cfg.listen, cfg.target);
+    println!(
+        "{}: {} -> {}",
+        text(cfg.language, Message::ServerListening),
+        cfg.listen,
+        cfg.target
+    );
     tokio::spawn(program::run(
         cfg.managed_program_enabled,
         cfg.managed_program_path.clone(),
         cfg.managed_program_args.clone(),
         cfg.managed_program_restart_interval_secs,
+        cfg.language,
     ));
     let ctx = Arc::new(proxy::Ctx::new(cfg));
 

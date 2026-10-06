@@ -1,3 +1,4 @@
+use crate::locale::{text, Language, Message};
 use chrono::Local;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
@@ -14,11 +15,19 @@ pub struct Logger {
     max_bytes: u64,
     max_files: u32,
     max_body: usize,
+    language: Language,
     state: Mutex<State>,
 }
 
 impl Logger {
-    pub fn new(path: &str, max_bytes: u64, max_files: u32, max_body: usize, enabled: bool) -> Self {
+    pub fn new(
+        path: &str,
+        max_bytes: u64,
+        max_files: u32,
+        max_body: usize,
+        enabled: bool,
+        language: Language,
+    ) -> Self {
         let (file, size) = if enabled { Self::open(path) } else { (None, 0) };
         Self {
             enabled,
@@ -26,6 +35,7 @@ impl Logger {
             max_bytes,
             max_files,
             max_body,
+            language,
             state: Mutex::new(State { file, size }),
         }
     }
@@ -46,20 +56,25 @@ impl Logger {
         }
 
         let cut = &body[..body.len().min(self.max_body)];
-        let mut text = format!("[{}] #{id} {head} ({} octets)\n", timestamp(), body.len());
-        text.push_str(&String::from_utf8_lossy(cut));
+        let mut entry = format!(
+            "[{}] #{id} {head} ({} {})\n",
+            timestamp(),
+            body.len(),
+            text(self.language, Message::Bytes)
+        );
+        entry.push_str(&String::from_utf8_lossy(cut));
         if cut.len() < body.len() {
-            text.push_str("\n...[tronqué]");
+            entry.push_str(&format!("\n...[{}]", text(self.language, Message::Truncated)));
         }
-        text.push_str("\n\n");
+        entry.push_str("\n\n");
 
         let mut st = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        if st.size > 0 && st.size + text.len() as u64 > self.max_bytes {
+        if st.size > 0 && st.size + entry.len() as u64 > self.max_bytes {
             self.rotate(&mut st);
         }
         if let Some(f) = st.file.as_mut() {
-            if f.write_all(text.as_bytes()).is_ok() {
-                st.size += text.len() as u64;
+            if f.write_all(entry.as_bytes()).is_ok() {
+                st.size += entry.len() as u64;
             }
         }
     }
