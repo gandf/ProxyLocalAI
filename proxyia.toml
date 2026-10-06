@@ -18,8 +18,8 @@ max_body_log_bytes = 800000
 
 # Lancer un programme avec ProxyIA (chemin vide ou option désactivée = aucun lancement)
 managed_program_enabled = true
-managed_program_path = "C:/Windows/System32/cmd.exe"
-managed_program_args = ["/C", "F:/IA/Strata/START-HERE.bat"]
+managed_program_path = "C:\\Windows\\System32\\cmd.exe"
+managed_program_args = ["/C", "F:\\IA\\Strata\\START-HERE.bat"]
 # Ctrl+C force l'arrêt du programme et de ses descendants; 0 = démarrage unique
 # Intervalle de redémarrage en secondes (0 = aucun redémarrage périodique)
 managed_program_restart_interval_secs = 3600

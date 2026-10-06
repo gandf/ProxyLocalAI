@@ -5,6 +5,9 @@ use tokio::process::{Child, Command};
 use tokio::sync::oneshot;
 use tokio::time::sleep;
 
+#[cfg(windows)]
+const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+
 pub async fn run(
     enabled: bool,
     path: String,
@@ -79,6 +82,9 @@ fn start(path: &str, args: &[String], language: Language) -> Option<Child> {
         command
     };
 
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NEW_PROCESS_GROUP);
+
     match command.kill_on_drop(true).spawn() {
         Ok(child) => {
             println!("{}: {path}", text(language, Message::ProgramStarted));
@@ -121,10 +127,16 @@ async fn stop_tree(child: &mut Child, path: &str, language: Language) {
         Ok(output) if output.status.success() => true,
         #[cfg(windows)]
         Ok(output) => {
+            let detail = if output.stderr.is_empty() {
+                &output.stdout
+            } else {
+                &output.stderr
+            };
             eprintln!(
-                "{}: taskkill exited with {}",
+                "{}: taskkill exited with {}: {}",
                 text(language, Message::ProgramTreeStopFailed),
-                output.status
+                output.status,
+                String::from_utf8_lossy(detail).trim()
             );
             false
         }
@@ -184,5 +196,26 @@ mod tests {
 
         assert!(started.elapsed() < Duration::from_secs(5));
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn cmd_config_runs_a_batch_with_a_quoted_working_directory() {
+        let dir = std::env::temp_dir().join(format!("proxyia batch test {}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let batch = dir.join("START-HERE.bat");
+        std::fs::write(
+            &batch,
+            "@echo off\r\ncd /d \"%~dp0\"\r\nif errorlevel 1 exit /b 1\r\nexit /b 0\r\n",
+        )
+        .unwrap();
+
+        let args = ["/C".to_owned(), batch.to_string_lossy().into_owned()];
+        let mut child = start("C:\\Windows\\System32\\cmd.exe", &args, Language::En)
+            .expect("cmd.exe should start");
+        let status = child.wait().await.unwrap();
+
+        std::fs::remove_dir_all(dir).unwrap();
+        assert!(status.success(), "cmd.exe exited with {status}");
     }
 }
